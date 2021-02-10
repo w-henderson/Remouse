@@ -21,18 +21,24 @@ pub fn init() -> Server {
 pub fn run(server: &mut Server) {
     let mut button_flags: u8 = 0;
     let mut previous_button_flags: u8;
+    let mut announced_connection = false;
     let button_types: Vec<MouseButton> =
         vec![MouseButton::Left, MouseButton::Right, MouseButton::Middle];
 
     loop {
         let mut buf = [0; 9];
-        server.socket.recv_from(&mut buf).unwrap();
+        let (_, addr) = server.socket.recv_from(&mut buf).unwrap();
+        if !announced_connection {
+            println!("receiving mouse input from {}", addr.ip());
+            announced_connection = true;
+        }
 
         let x = i32::from_le_bytes(buf[0..4].try_into().unwrap());
         let y = i32::from_le_bytes(buf[4..8].try_into().unwrap());
         previous_button_flags = button_flags;
         button_flags = buf[8];
 
+        // Check the button flags and update the mouse state accordingly
         let button_states = button_flags.to_bools();
         let previous_button_states = previous_button_flags.to_bools();
         for button_id in 0..button_types.len() {
@@ -43,6 +49,10 @@ pub fn run(server: &mut Server) {
                 }
             }
         }
+
+        // Scroll if the user is scrolling
+        let scroll_distance = button_states[3] as i32 - button_states[4] as i32;
+        server.output_manager.mouse_scroll_y(scroll_distance);
 
         server.output_manager.mouse_move_relative(x, y);
     }
