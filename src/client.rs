@@ -42,7 +42,7 @@ pub fn init(ip: String) -> Client {
     }
 }
 
-/// Run the client, detecting mouse events and sending them to the server
+/// Run the client, detecting input events and sending them to the server
 pub fn run(client: &mut Client, override_movement: bool) {
     let mut scroll: i8;
     let mut button_flags: i8 = 0;
@@ -91,7 +91,8 @@ pub fn run(client: &mut Client, override_movement: bool) {
         let key_flags_option = pressed_keys_to_flags(&pressed_keys);
 
         let key_flags: u64 = if key_flags_option == None {
-            exit(0);
+            disconnect_and_exit(client);
+            0
         } else {
             key_flags_option.unwrap()
         };
@@ -145,7 +146,7 @@ fn override_movement_transmit(
     transmit(client, x, y, button_flags, key_flags)
 }
 
-/// Transmits the mouse's relative movement as well as the button states
+/// Transmits the mouse's relative movement, button states, and key presses
 fn transmit(client: &mut Client, x: &i32, y: &i32, button_flags: i8, key_flags: u64) -> bool {
     let x_le_i16 = i16::try_from(*x).unwrap().to_le_bytes();
     let y_le_i16 = i16::try_from(*y).unwrap().to_le_bytes();
@@ -157,4 +158,15 @@ fn transmit(client: &mut Client, x: &i32, y: &i32, button_flags: i8, key_flags: 
     client.socket.send(&to_send).unwrap();
 
     true
+}
+
+/// Send a disconnect message and quit the program.
+/// The disconnect message is 13 bytes of zeroes, resetting every key and mouse button to an up state.
+/// The 3rd bit of the 5th byte is a 1, indicating to the server that the client wishes to disconnect.
+fn disconnect_and_exit(client: &mut Client) {
+    let mut to_send: [u8; 13] = [0; 13];
+    to_send[4] = 0b_0010_0000;
+
+    client.socket.send(&to_send).unwrap();
+    exit(0);
 }

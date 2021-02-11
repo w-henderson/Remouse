@@ -19,12 +19,24 @@ pub fn init() -> Server {
 }
 
 /// Run the server, listening for events and acting upon them.
-/// Recieves UDP packets of length 17 bytes in the following format:
+/// Recieves UDP packets of length 13 bytes in the following format:
 ///
-/// - bytes 0-3:  x coordinate of mouse as little endian `i32`
-/// - bytes 4-7:  y coordinate of mouse as little endian `i32`
-/// - byte 8:     mouse button flags, from smallest bit meaning left, right, middle, scroll up and down
-/// - bytes 9-17: key flags, mapping described in `keyboard.rs`
+/// - bytes 0-1:  x coordinate of mouse as little endian `i32`
+/// - bytes 2-3:  y coordinate of mouse as little endian `i32`
+/// - byte 4:     mouse button and connection info flags
+/// - bytes 5-13: key flags, mapping described in `keyboard.rs`
+///
+/// The mouse button and connection info flags are one byte.
+/// Their meanings are as follows from the least significant bit:
+///
+/// - left click
+/// - right click
+/// - middle click
+/// - scroll up
+/// - scroll down
+/// - disconnect bit (1 triggers a clean disconnect)
+///
+/// The other bits are currently unused.
 pub fn run(server: &mut Server) {
     let mut button_flags: u8 = 0;
     let mut key_flags: u64 = 0;
@@ -82,6 +94,11 @@ pub fn run(server: &mut Server) {
             if !previous_keys_held.contains(key) {
                 server.output_manager.key_down(*key);
             }
+        }
+
+        if button_states[5] == true {
+            println!("connection to {} closed", addr.ip());
+            announced_connection = false;
         }
 
         server
