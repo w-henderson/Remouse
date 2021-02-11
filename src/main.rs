@@ -13,7 +13,7 @@ fn main() {
         println!("connecting...");
         let ip = &args[2];
         let mut client = client::init(ip.clone());
-        println!("connected, streaming mouse input");
+        println!("connected, streaming input");
         let allow_movement = args.len() == 4 && args[3] == "--no-override-movement";
         client::run(&mut client, !allow_movement);
     } else if args.len() == 2 && args[1] == "serve" {
