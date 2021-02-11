@@ -1,4 +1,5 @@
 mod client;
+mod keyboard;
 mod server;
 
 fn show_help_text() {

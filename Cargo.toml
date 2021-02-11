@@ -9,3 +9,4 @@ edition = "2018"
 [dependencies]
 multiinput = "0.1.0"
 enigo = "0.0.14"
+minifb = "0.10.6"

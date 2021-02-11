@@ -1,8 +1,14 @@
+use crate::keyboard::pressed_keys_to_flags;
 use enigo::*;
+use minifb::{CursorStyle, Window, WindowOptions};
 use multiinput::*;
-use std::{convert::TryInto, net::UdpSocket, thread::sleep, time::Duration, time::SystemTime};
+use std::{
+    convert::TryInto, net::UdpSocket, process::exit, thread::sleep, time::Duration,
+    time::SystemTime,
+};
 
 pub struct Client {
+    window: Window,
     input_manager: RawInputManager,
     output_manager: Enigo,
     socket: UdpSocket,
@@ -11,16 +17,22 @@ pub struct Client {
 /// Initialise the client by connecting the UDP socket to the server.
 /// This also registers `multiinput` to listen for mouse events.
 pub fn init(ip: String) -> Client {
-    let mut manager = RawInputManager::new().unwrap();
-    manager.register_devices(DeviceType::Mice);
+    let mut input_manager = RawInputManager::new().unwrap();
+    input_manager.register_devices(DeviceType::Mice);
 
     let output_manager = Enigo::new();
+
+    let mut window = Window::new("Remouse", 100, 100, WindowOptions::default()).unwrap();
+    window.update();
+    window.set_position(-50, -50);
+    window.set_cursor_style(CursorStyle::Arrow);
 
     let socket = UdpSocket::bind("0.0.0.0:42069").unwrap();
     socket.connect(&ip).unwrap();
 
     Client {
-        input_manager: manager,
+        window,
+        input_manager,
         output_manager,
         socket,
     }
@@ -70,6 +82,16 @@ pub fn run(client: &mut Client, override_movement: bool) {
             _ => button_flags,               // If not scrolling, don't set scroll flags
         };
 
+        // Update the key flags according to which keys have been pressed
+        let pressed_keys = client.window.get_keys().unwrap();
+        let key_flags_option = pressed_keys_to_flags(&pressed_keys);
+
+        let key_flags: u64 = if key_flags_option == None {
+            exit(0);
+        } else {
+            key_flags_option.unwrap()
+        };
+
         // If the mouse has moved, send the data and set transmitted to true. Defaults to false
         let transmitted = events
             .iter()
@@ -78,9 +100,15 @@ pub fn run(client: &mut Client, override_movement: bool) {
                     last_movement_time = SystemTime::now();
 
                     if override_movement {
-                        Some(override_movement_transmit(client, x, y, button_flags))
+                        Some(override_movement_transmit(
+                            client,
+                            x,
+                            y,
+                            button_flags,
+                            key_flags,
+                        ))
                     } else {
-                        Some(transmit(client, x, y, button_flags))
+                        Some(transmit(client, x, y, button_flags, key_flags))
                     }
                 }
                 _ => None,
@@ -91,25 +119,34 @@ pub fn run(client: &mut Client, override_movement: bool) {
         // Don't do this if the mouse has recently moved to fix issue #1
         if !transmitted {
             if last_movement_time.elapsed().unwrap().as_millis() > 50 {
-                transmit(client, &0, &0, button_flags);
+                transmit(client, &0, &0, button_flags, key_flags);
                 sleep(Duration::from_millis(1));
             }
         }
+
+        client.window.update();
     }
 }
 
 /// Override the mouse movement by locking the mouse to the top left of the screen.
 /// Ideally, it would hide the mouse and block events from going to the OS completely.
 /// If you know a way to do this, please open an issue or PR!
-fn override_movement_transmit(client: &mut Client, x: &i32, y: &i32, button_flags: i8) -> bool {
+fn override_movement_transmit(
+    client: &mut Client,
+    x: &i32,
+    y: &i32,
+    button_flags: i8,
+    key_flags: u64,
+) -> bool {
     client.output_manager.mouse_move_to(0, 0);
-    transmit(client, x, y, button_flags)
+    transmit(client, x, y, button_flags, key_flags)
 }
 
 /// Transmits the mouse's relative movement as well as the button states
-fn transmit(client: &mut Client, x: &i32, y: &i32, button_flags: i8) -> bool {
+fn transmit(client: &mut Client, x: &i32, y: &i32, button_flags: i8, key_flags: u64) -> bool {
     let mut to_send = [x.to_le_bytes(), y.to_le_bytes()].concat();
     to_send.push(button_flags.try_into().unwrap());
+    to_send.extend_from_slice(&key_flags.to_le_bytes());
 
     client.socket.send(&to_send).unwrap();
 

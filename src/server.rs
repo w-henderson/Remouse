@@ -26,7 +26,7 @@ pub fn run(server: &mut Server) {
         vec![MouseButton::Left, MouseButton::Right, MouseButton::Middle];
 
     loop {
-        let mut buf = [0; 9];
+        let mut buf = [0; 17];
         let (_, addr) = server.socket.recv_from(&mut buf).unwrap();
         if !announced_connection {
             println!("receiving mouse input from {}", addr.ip());
@@ -37,6 +37,8 @@ pub fn run(server: &mut Server) {
         let y = i32::from_le_bytes(buf[4..8].try_into().unwrap());
         previous_button_flags = button_flags;
         button_flags = buf[8];
+        let key_flags = i64::from_le_bytes(buf[9..17].try_into().unwrap());
+        println!("key flags: {}", key_flags);
 
         // Check the button flags and update the mouse state accordingly
         let button_states = button_flags.to_bools();
