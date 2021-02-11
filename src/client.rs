@@ -1,6 +1,6 @@
 use enigo::*;
 use multiinput::*;
-use std::{convert::TryInto, net::UdpSocket};
+use std::{convert::TryInto, net::UdpSocket, thread::sleep, time::Duration, time::SystemTime};
 
 pub struct Client {
     input_manager: RawInputManager,
@@ -30,13 +30,14 @@ pub fn init(ip: String) -> Client {
 pub fn run(client: &mut Client, override_movement: bool) {
     let mut scroll: i8;
     let mut button_flags: i8 = 0;
-    let mut button_flags_previous: i8;
+    let mut last_movement_time: SystemTime = SystemTime::now();
+    //let mut button_flags_previous: i8;
 
     loop {
         let events = client.input_manager.get_events().collect::<Vec<RawEvent>>();
 
         // Store the previous button flags to know if they changed
-        button_flags_previous = button_flags;
+        //button_flags_previous = button_flags;
         scroll = 0;
 
         // Update the button flags to match the currently held buttons
@@ -74,6 +75,8 @@ pub fn run(client: &mut Client, override_movement: bool) {
             .iter()
             .find_map(|e| match e {
                 RawEvent::MouseMoveEvent(_, x, y) => {
+                    last_movement_time = SystemTime::now();
+
                     if override_movement {
                         Some(override_movement_transmit(client, x, y, button_flags))
                     } else {
@@ -84,9 +87,13 @@ pub fn run(client: &mut Client, override_movement: bool) {
             })
             .unwrap_or(false);
 
-        // If not already sent the data this iteration and the button states have changed, send it anyway
-        if !transmitted && button_flags != button_flags_previous {
-            transmit(client, &0, &0, button_flags);
+        // If not already sent the data this iteration, send it anyway with no movement
+        // Don't do this if the mouse has recently moved to fix issue #1
+        if !transmitted {
+            if last_movement_time.elapsed().unwrap().as_millis() > 50 {
+                transmit(client, &0, &0, button_flags);
+                sleep(Duration::from_millis(1));
+            }
         }
     }
 }

@@ -52,7 +52,9 @@ pub fn run(server: &mut Server) {
 
         // Scroll if the user is scrolling
         let scroll_distance = button_states[3] as i32 - button_states[4] as i32;
-        server.output_manager.mouse_scroll_y(scroll_distance);
+        if scroll_distance != 0 {
+            server.output_manager.mouse_scroll_y(scroll_distance);
+        }
 
         server.output_manager.mouse_move_relative(x, y);
     }
