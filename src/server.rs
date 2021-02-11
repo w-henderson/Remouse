@@ -21,10 +21,10 @@ pub fn init() -> Server {
 /// Run the server, listening for events and acting upon them.
 /// Recieves UDP packets of length 17 bytes in the following format:
 ///
-/// - bytes 0 to 3:  x coordinate of mouse as little endian `i32`
-/// - bytes 4 to 7:  y coordinate of mouse as little endian `i32`
-/// - byte 8:        mouse button flags, from smallest bit meaning left, right, middle, scroll up and down
-/// - bytes 9 to 17: key flags, mapping described in `keyboard.rs`
+/// - bytes 0-3:  x coordinate of mouse as little endian `i32`
+/// - bytes 4-7:  y coordinate of mouse as little endian `i32`
+/// - byte 8:     mouse button flags, from smallest bit meaning left, right, middle, scroll up and down
+/// - bytes 9-17: key flags, mapping described in `keyboard.rs`
 pub fn run(server: &mut Server) {
     let mut button_flags: u8 = 0;
     let mut key_flags: u64 = 0;
@@ -36,19 +36,19 @@ pub fn run(server: &mut Server) {
         vec![MouseButton::Left, MouseButton::Right, MouseButton::Middle];
 
     loop {
-        let mut buf = [0; 17];
+        let mut buf = [0; 13];
         let (_, addr) = server.socket.recv_from(&mut buf).unwrap();
         if !announced_connection {
             println!("receiving input from {}", addr.ip());
             announced_connection = true;
         }
 
-        let x = i32::from_le_bytes(buf[0..4].try_into().unwrap());
-        let y = i32::from_le_bytes(buf[4..8].try_into().unwrap());
+        let x = i16::from_le_bytes(buf[0..2].try_into().unwrap());
+        let y = i16::from_le_bytes(buf[2..4].try_into().unwrap());
         previous_button_flags = button_flags;
         previous_key_flags = key_flags;
-        button_flags = buf[8];
-        key_flags = u64::from_le_bytes(buf[9..17].try_into().unwrap());
+        button_flags = buf[4];
+        key_flags = u64::from_le_bytes(buf[5..13].try_into().unwrap());
 
         // Check the button flags and update the mouse state accordingly
         let button_states = button_flags.to_bools();
@@ -84,7 +84,9 @@ pub fn run(server: &mut Server) {
             }
         }
 
-        server.output_manager.mouse_move_relative(x, y);
+        server
+            .output_manager
+            .mouse_move_relative(x as i32, y as i32);
     }
 }
 

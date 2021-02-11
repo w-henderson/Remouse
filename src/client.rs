@@ -3,10 +3,14 @@ use enigo::*;
 use minifb::{CursorStyle, Window, WindowOptions};
 use multiinput::*;
 use std::{
-    convert::TryInto, net::UdpSocket, process::exit, thread::sleep, time::Duration,
-    time::SystemTime,
+    convert::{TryFrom, TryInto},
+    net::UdpSocket,
+    process::exit,
+    thread::sleep,
+    time::{Duration, SystemTime},
 };
 
+/// Represents a client and holds objects relating to it.
 pub struct Client {
     window: Window,
     input_manager: RawInputManager,
@@ -129,8 +133,7 @@ pub fn run(client: &mut Client, override_movement: bool) {
 }
 
 /// Override the mouse movement by locking the mouse to the top left of the screen.
-/// Ideally, it would hide the mouse and block events from going to the OS completely.
-/// If you know a way to do this, please open an issue or PR!
+/// This is inside the key capture box so keys are always captured.
 fn override_movement_transmit(
     client: &mut Client,
     x: &i32,
@@ -144,7 +147,10 @@ fn override_movement_transmit(
 
 /// Transmits the mouse's relative movement as well as the button states
 fn transmit(client: &mut Client, x: &i32, y: &i32, button_flags: i8, key_flags: u64) -> bool {
-    let mut to_send = [x.to_le_bytes(), y.to_le_bytes()].concat();
+    let x_le_i16 = i16::try_from(*x).unwrap().to_le_bytes();
+    let y_le_i16 = i16::try_from(*y).unwrap().to_le_bytes();
+
+    let mut to_send = [x_le_i16, y_le_i16].concat();
     to_send.push(button_flags.try_into().unwrap());
     to_send.extend_from_slice(&key_flags.to_le_bytes());
 
