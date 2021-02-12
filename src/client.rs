@@ -20,7 +20,7 @@ pub struct Client {
 
 /// Initialise the client by connecting the UDP socket to the server.
 /// This also registers `multiinput` to listen for mouse events.
-pub fn init(ip: String) -> Client {
+pub fn init(ip: String) -> Option<Client> {
     let mut input_manager = RawInputManager::new().unwrap();
     input_manager.register_devices(DeviceType::Mice);
 
@@ -34,11 +34,22 @@ pub fn init(ip: String) -> Client {
     let socket = UdpSocket::bind("0.0.0.0:42069").unwrap();
     socket.connect(&ip).unwrap();
 
-    Client {
-        window,
-        input_manager,
-        output_manager,
-        socket,
+    let mut connect_message: [u8; 13] = [0; 13];
+    connect_message[4] = 0b0100_0000;
+    socket.send(&connect_message).unwrap();
+
+    let mut confirm_buf: [u8; 1] = [0; 1];
+    socket.recv(&mut confirm_buf).unwrap();
+
+    if confirm_buf[0] == 0xff {
+        Some(Client {
+            window,
+            input_manager,
+            output_manager,
+            socket,
+        })
+    } else {
+        None
     }
 }
 
@@ -47,13 +58,11 @@ pub fn run(client: &mut Client, override_movement: bool) {
     let mut scroll: i8;
     let mut button_flags: i8 = 0;
     let mut last_movement_time: SystemTime = SystemTime::now();
-    //let mut button_flags_previous: i8;
 
     loop {
         let events = client.input_manager.get_events().collect::<Vec<RawEvent>>();
 
         // Store the previous button flags to know if they changed
-        //button_flags_previous = button_flags;
         scroll = 0;
 
         // Update the button flags to match the currently held buttons

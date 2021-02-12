@@ -35,24 +35,37 @@ pub fn init() -> Server {
 /// - scroll up
 /// - scroll down
 /// - disconnect bit (1 triggers a clean disconnect)
+/// - connect bit (1 signals that the connection is ready)
 ///
-/// The other bits are currently unused.
+/// The final bit is currently unused.
 pub fn run(server: &mut Server) {
     let mut button_flags: u8 = 0;
     let mut key_flags: u64 = 0;
     let mut previous_button_flags: u8;
     let mut previous_key_flags: u64;
 
-    let mut announced_connection = false;
+    let mut acknowledged_connection = false;
     let button_types: Vec<MouseButton> =
         vec![MouseButton::Left, MouseButton::Right, MouseButton::Middle];
 
     loop {
         let mut buf = [0; 13];
         let (_, addr) = server.socket.recv_from(&mut buf).unwrap();
-        if !announced_connection {
-            println!("receiving input from {}", addr.ip());
-            announced_connection = true;
+
+        if !acknowledged_connection {
+            let mut connect_message: [u8; 13] = [0; 13];
+            connect_message[4] = 0b0100_0000;
+
+            if buf == connect_message {
+                println!("receiving input from {}", addr.ip());
+                server.socket.send_to(&[0xff_u8], addr).unwrap();
+                acknowledged_connection = true;
+            } else {
+                println!("received malformed request from {}, ignoring", addr.ip());
+                server.socket.send_to(&[0x00_u8], addr).unwrap();
+            };
+
+            continue;
         }
 
         let x = i16::from_le_bytes(buf[0..2].try_into().unwrap());
@@ -98,7 +111,7 @@ pub fn run(server: &mut Server) {
 
         if button_states[5] == true {
             println!("connection to {} closed", addr.ip());
-            announced_connection = false;
+            acknowledged_connection = false;
         }
 
         server
